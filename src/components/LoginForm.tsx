@@ -47,17 +47,15 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+    <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">CollabOS</h1>
-          <p className="mt-1 text-sm text-slate-400">Sign in to your pipeline</p>
+          <h1 className="font-display text-4xl text-white">CollabOS</h1>
+          <div className="mx-auto mt-2 h-px w-16 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          <p className="mt-3 text-sm text-slate-400">Sign in to your pipeline</p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-slate-800 bg-slate-900/60 p-6"
-        >
+        <form onSubmit={handleSubmit} className="glass space-y-4 rounded-3xl p-6">
           <div>
             <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-slate-300">
               Email
@@ -69,7 +67,7 @@ export default function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-sky-400/60 focus:bg-white/[0.08]"
               placeholder="you@example.com"
             />
           </div>
@@ -85,7 +83,7 @@ export default function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-sky-500"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-sky-400/60 focus:bg-white/[0.08]"
               placeholder="••••••••"
             />
           </div>
@@ -99,7 +97,7 @@ export default function LoginForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-sky-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-sky-500 px-3 py-2.5 text-sm font-medium text-white shadow-lg shadow-sky-500/20 transition-colors hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? "Signing in…" : "Sign in"}
           </button>

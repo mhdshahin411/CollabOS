@@ -132,10 +132,10 @@ export default function VoiceBriefing() {
     <div className="flex flex-col items-end gap-2">
       <button
         onClick={handleMicClick}
-        className={`flex items-center gap-2.5 rounded-full border px-4 py-2.5 text-sm font-medium transition-all ${
+        className={`flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-medium transition-all ${
           state === "idle"
-            ? "border-slate-700 bg-slate-900 text-slate-200 hover:border-sky-500/50 hover:text-white"
-            : "border-sky-500/50 bg-sky-500/10 text-sky-300"
+            ? "glass-soft text-slate-200 hover:text-white"
+            : "border border-sky-400/50 bg-sky-500/15 text-sky-200"
         }`}
       >
         <span className="relative flex h-2.5 w-2.5">
