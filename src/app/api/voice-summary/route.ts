@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { generateVoiceBriefing } from "@/lib/ai";
+import { generateVoiceBriefing } from "@/lib/gemini";
 import type { Deal } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ export const maxDuration = 60;
  * Headers:  Authorization: Bearer <supabase access token>
  * Body:     { "query"?: string, "markAsRead"?: boolean }   (both optional)
  *
- * Fetches the user's unread deals and asks Claude for a short,
+ * Fetches the user's unread deals and asks Gemini for a short,
  * talent-manager-style spoken briefing. The client plays it via TTS.
  */
 export async function POST(req: NextRequest) {
@@ -56,12 +56,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // 3. Claude turns the deal digest into a spoken briefing
+  // 3. Gemini turns the deal digest into a spoken briefing
   let briefing: string;
   try {
     briefing = await generateVoiceBriefing(deals as Deal[], query);
   } catch (err) {
-    console.error("Claude briefing failed:", err);
+    console.error("Gemini briefing failed:", err);
     return NextResponse.json({ error: "Failed to generate briefing" }, { status: 502 });
   }
 
