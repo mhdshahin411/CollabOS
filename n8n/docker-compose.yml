@@ -1,0 +1,60 @@
+# Local n8n for CollabOS ingestion.
+#   Start:  cd n8n && docker compose up -d
+#   Open:   http://localhost:5678   (create your local owner account)
+#   Stop:   docker compose down      (data persists in the named volumes)
+#
+# n8n runs in a container; your Next.js app runs on the host at :3000.
+# From inside the container the host is reachable at host.docker.internal,
+# so the HTTP Request node targets http://host.docker.internal:3000/api/ingest.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: n8n
+    volumes:
+      - n8n_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # --- persistence ---
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: db
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_DATABASE: n8n
+      # --- credential encryption: BACK THIS UP. Lose it = lose every saved login ---
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # --- local basics ---
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: UTC
+      # --- keep the execution DB from growing unbounded ---
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "336"     # hours (14 days)
+      # --- so the container can reach your app on the host ---
+      # (host.docker.internal resolves to the host on Docker Desktop for Mac)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_db:
+  n8n_data:
