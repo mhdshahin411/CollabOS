@@ -68,6 +68,7 @@ create unique index messages_external_id_uidx
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''   -- pin search_path (Supabase security linter 0011)
 as $$
 begin
   new.updated_at = now();

@@ -5,6 +5,9 @@ import type { Channel } from "@/lib/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
+// Gemini extraction can take a few seconds; don't let a slow call hit the
+// default serverless timeout. (Hobby plan caps maxDuration at 60s.)
+export const maxDuration = 60;
 
 /**
  * POST /api/ingest — called by n8n whenever a message arrives on any channel.

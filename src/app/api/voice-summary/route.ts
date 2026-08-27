@@ -4,6 +4,7 @@ import { generateVoiceBriefing } from "@/lib/gemini";
 import type { Deal } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /**
  * POST /api/voice-summary — called by the Voice Briefing module.

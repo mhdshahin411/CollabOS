@@ -1,7 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Deal, DealPriority } from "@/lib/types";
 
-const MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash is no longer available to new API users; Google's API now
+// points new projects to gemini-3.6-flash. Same generateContent interface.
+const MODEL = "gemini-3.6-flash";
 
 let client: GoogleGenAI | null = null;
 function getGemini(): GoogleGenAI {
