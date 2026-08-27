@@ -19,6 +19,14 @@ function currency(n: number): string {
   }
 }
 
+function displayName(email?: string): string {
+  if (!email) return "Your workspace";
+  const local = email.split("@")[0];
+  return local
+    .replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function Sidebar({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
   const { deals, channelFilter, setChannelFilter } = useDeals();
 
@@ -31,12 +39,22 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
     c === "all" ? deals.length : deals.filter((d) => d.source_channel === c).length;
 
   return (
-    <aside className="glass flex flex-col gap-6 rounded-3xl p-5 lg:h-[calc(100vh-4rem)] lg:sticky lg:top-8">
+    <aside className="glass flex flex-col gap-5 rounded-3xl p-5 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto scroll-slim">
       {/* Brand */}
       <div className="px-1 pt-1">
         <h1 className="font-display text-2xl text-white">CollabOS</h1>
         <div className="mt-1 h-px w-16 bg-gradient-to-r from-white/40 to-transparent" />
-        <p className="mt-2 text-xs text-slate-400">AI deal pipeline</p>
+      </div>
+
+      {/* Profile */}
+      <div className="glass-soft flex items-center gap-3 rounded-2xl p-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-sky-500/40 to-fuchsia-500/30 text-sm font-semibold text-white ring-1 ring-white/15">
+          {(email?.[0] ?? "?").toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-white">{displayName(email)}</p>
+          <p className="truncate text-[11px] text-slate-400">{email ?? "Signed in"}</p>
+        </div>
       </div>
 
       {/* Pipeline value */}
@@ -77,11 +95,24 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
         </div>
       </div>
 
-      {/* Channel filter */}
+      {/* Connected accounts (also filters the board) */}
       <div>
-        <p className="mb-2.5 px-1 text-[10px] uppercase tracking-wider text-slate-500">Channels</p>
+        <p className="mb-2.5 px-1 text-[10px] uppercase tracking-wider text-slate-500">Connected accounts</p>
         <div className="space-y-1">
-          {(["all", ...CHANNELS] as ChannelFilter[]).map((c) => {
+          <button
+            onClick={() => setChannelFilter("all")}
+            className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition-colors ${
+              channelFilter === "all" ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-300 hover:bg-white/5"
+            }`}
+          >
+            <span className="grid h-3.5 w-3.5 place-items-center text-slate-400">◎</span>
+            <span className="flex-1 text-left">All channels</span>
+            <span className="text-xs tabular-nums text-slate-500">{channelCount("all")}</span>
+          </button>
+
+          {CHANNELS.map((c) => {
+            const count = channelCount(c);
+            const connected = count > 0;
             const isActive = channelFilter === c;
             return (
               <button
@@ -91,28 +122,25 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
                   isActive ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-300 hover:bg-white/5"
                 }`}
               >
-                {c === "all" ? (
-                  <span className="grid h-3.5 w-3.5 place-items-center text-slate-400">◎</span>
-                ) : (
-                  <ChannelIcon channel={c} />
-                )}
-                <span className="flex-1 text-left">{c === "all" ? "All channels" : CHANNEL_LABELS[c]}</span>
-                <span className="text-xs tabular-nums text-slate-500">{channelCount(c)}</span>
+                <ChannelIcon channel={c} />
+                <span className="flex-1 text-left">
+                  {CHANNEL_LABELS[c]}
+                  <span className={`ml-2 text-[10px] ${connected ? "text-emerald-400" : "text-slate-600"}`}>
+                    {connected ? "● active" : "○ not linked"}
+                  </span>
+                </span>
+                <span className="text-xs tabular-nums text-slate-500">{count}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* User */}
-      <div className="mt-auto flex items-center gap-2.5 border-t border-white/10 pt-4">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-sky-500/20 text-sm font-medium text-sky-200 ring-1 ring-sky-400/30">
-          {(email?.[0] ?? "?").toUpperCase()}
-        </div>
-        <span className="min-w-0 flex-1 truncate text-xs text-slate-400">{email ?? "Signed in"}</span>
+      {/* Sign out */}
+      <div className="mt-auto border-t border-white/10 pt-4">
         <button
           onClick={onSignOut}
-          className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
         >
           Sign out
         </button>
