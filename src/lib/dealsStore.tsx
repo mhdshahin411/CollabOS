@@ -57,6 +57,7 @@ export function DealsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = getSupabaseBrowser();
     let loaded = false;
+    let loadToken = 0; // guards against an older load() resolving after a newer one
     const buffer: RealtimePostgresChangesPayload<Deal>[] = [];
 
     const apply = (prev: Deal[], p: RealtimePostgresChangesPayload<Deal>): Deal[] => {
@@ -78,10 +79,15 @@ export function DealsProvider({ children }: { children: React.ReactNode }) {
     };
 
     const load = async () => {
+      const myToken = ++loadToken;
       const { data, error } = await supabase
         .from("deals")
         .select("*")
         .order("created_at", { ascending: false });
+      // A newer load() started while this one was in flight (e.g. the initial
+      // fetch racing the SUBSCRIBED refetch). Bail without draining the buffer
+      // or writing state, so the newer load owns the result.
+      if (myToken !== loadToken) return;
       if (error) {
         console.error("Failed to load deals:", error);
         setLoadError(error.message);

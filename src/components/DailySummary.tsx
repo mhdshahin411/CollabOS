@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 
 /**
@@ -12,6 +12,7 @@ export default function DailySummary() {
   const [count, setCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const mountedRef = useRef(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -20,9 +21,9 @@ export default function DailySummary() {
       const {
         data: { session },
       } = await getSupabaseBrowser().auth.getSession();
+      if (!mountedRef.current) return;
       if (!session) {
         setError(true);
-        setLoading(false);
         return;
       }
       const res = await fetch("/api/voice-summary", {
@@ -35,18 +36,23 @@ export default function DailySummary() {
       });
       if (!res.ok) throw new Error(String(res.status));
       const data: { briefing: string; deal_count?: number } = await res.json();
+      if (!mountedRef.current) return;
       setText(data.briefing);
       setCount(data.deal_count ?? null);
     } catch (err) {
       console.error("Daily summary failed:", err);
-      setError(true);
+      if (mountedRef.current) setError(true);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     void load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [load]);
 
   return (

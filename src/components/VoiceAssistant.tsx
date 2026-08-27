@@ -31,7 +31,6 @@ export default function VoiceAssistant() {
   const [error, setError] = useState<string | null>(null);
   const [clapEnabled, setClapEnabled] = useState(false);
   const [clapActive, setClapActive] = useState(false); // mic actually listening
-  const gotResultRef = useRef(false);
 
   useEffect(() => {
     return () => window.speechSynthesis?.cancel();
@@ -95,31 +94,41 @@ export default function VoiceAssistant() {
       runBriefing();
       return;
     }
-    gotResultRef.current = false;
+    // A single latch so EXACTLY one of result/error/end drives the outcome —
+    // otherwise a browser that ends the session with no result and no error
+    // would strand the UI on "Thinking…" forever.
+    let handled = false;
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
-      gotResultRef.current = true;
+      handled = true;
       const said = event.results[0][0].transcript;
       setTranscript(said);
       runBriefing(said);
     };
     recognition.onerror = () => {
-      if (!gotResultRef.current) runBriefing();
+      if (!handled) {
+        handled = true;
+        runBriefing();
+      }
     };
-    recognition.onend = () => setState((s) => (s === "listening" ? "thinking" : s));
+    recognition.onend = () => {
+      if (!handled) {
+        handled = true;
+        runBriefing();
+      }
+    };
     setState("listening");
-    recognition.start();
+    try {
+      recognition.start();
+    } catch {
+      if (!handled) {
+        handled = true;
+        runBriefing();
+      }
+    }
   }, [runBriefing]);
-
-  // Latest starter for the clap detector to call without re-subscribing the mic.
-  const activateRef = useRef<() => void>(() => {});
-  useEffect(() => {
-    activateRef.current = () => {
-      if (state === "idle") startListening();
-    };
-  }, [state, startListening]);
 
   const handleMicClick = useCallback(() => {
     if (state !== "idle") {
@@ -131,17 +140,28 @@ export default function VoiceAssistant() {
   }, [state, startListening]);
 
   // -------- Double-clap detection (Web Audio) --------
+  // Keyed on (clapEnabled, state): we only hold the mic while enabled AND idle.
+  // Releasing it the moment the assistant becomes active (a) frees the device so
+  // SpeechRecognition can capture the spoken query without contention, and
+  // (b) stops the analyser during TTS so speaker loopback can't self-trigger.
   useEffect(() => {
-    if (!clapEnabled) return;
+    if (!clapEnabled || state !== "idle") return;
 
     let stream: MediaStream | null = null;
     let ctx: AudioContext | null = null;
     let raf = 0;
     let cancelled = false;
+    let triggered = false;
     let armed = true;
     let lastClap = 0;
     let lastTrigger = 0;
     const buf = new Float32Array(1024);
+
+    const HIGH = 0.28; // transient peak that counts as a clap
+    const LOW = 0.08; // must fall below this to re-arm
+    const MIN_GAP = 60; // ms — reject same-clap echo, still catch fast double-claps
+    const MAX_GAP = 700; // ms — outer bound of a "double" clap
+    const COOLDOWN = 1500; // ms — ignore repeats right after a trigger
 
     navigator.mediaDevices
       ?.getUserMedia({ audio: true })
@@ -151,16 +171,16 @@ export default function VoiceAssistant() {
           return;
         }
         stream = s;
-        ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        ctx = new Ctor();
         const source = ctx.createMediaStreamSource(s);
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 1024;
         source.connect(analyser);
         setClapActive(true);
 
-        const HIGH = 0.28; // transient peak that counts as a clap
-        const LOW = 0.08; // must fall below this to re-arm
         const loop = () => {
+          if (triggered) return;
           analyser.getFloatTimeDomainData(buf);
           let peak = 0;
           for (let i = 0; i < buf.length; i++) {
@@ -171,12 +191,16 @@ export default function VoiceAssistant() {
           if (peak < LOW) armed = true;
           if (armed && peak > HIGH) {
             armed = false; // refractory until amplitude drops again
-            if (lastClap && now - lastClap > 120 && now - lastClap < 700 && now - lastTrigger > 1500) {
+            const dt = lastClap ? now - lastClap : Infinity;
+            if (dt >= MIN_GAP && dt <= MAX_GAP && now - lastTrigger > COOLDOWN) {
               lastTrigger = now;
               lastClap = 0;
-              activateRef.current();
-            } else {
-              lastClap = now;
+              triggered = true;
+              startListening(); // state leaves idle -> this effect tears down the mic
+              return;
+            }
+            if (dt >= MIN_GAP) {
+              lastClap = now; // a fresh first clap (too-fast transients are ignored)
             }
           }
           raf = requestAnimationFrame(loop);
@@ -197,7 +221,7 @@ export default function VoiceAssistant() {
       ctx?.close().catch(() => {});
       setClapActive(false);
     };
-  }, [clapEnabled]);
+  }, [clapEnabled, state, startListening]);
 
   const dismiss = () => {
     window.speechSynthesis?.cancel();
@@ -267,7 +291,7 @@ export default function VoiceAssistant() {
         <button
           onClick={handleMicClick}
           aria-label={label}
-          className={`grid h-14 w-14 place-items-center rounded-full shadow-xl transition-all ${
+          className={`relative grid h-14 w-14 place-items-center rounded-full shadow-xl transition-all ${
             state === "idle"
               ? "glass text-slate-100 hover:text-white hover:shadow-sky-500/20"
               : "border border-sky-400/50 bg-sky-500/80 text-white shadow-sky-500/30"
