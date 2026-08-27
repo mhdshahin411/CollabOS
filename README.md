@@ -16,7 +16,7 @@ WA    ─┘        (x-webhook-secret)    (JSON extraction)         │
 ```
 
 - **Ingestion** — n8n listens on each channel and forwards raw messages to `/api/ingest` with a shared-secret header.
-- **AI extraction** — Gemini (`gemini-3.6-flash`, structured JSON output) pulls out brand, budget, deliverables, deadline, priority, and a CRM summary. Non-deal messages (spam, fan mail) are skipped.
+- **AI extraction** — Claude (`claude-haiku-4-5`, structured JSON output) pulls out brand, budget, deliverables, deadline, priority, and a CRM summary. Non-deal messages (spam, fan mail) are skipped.
 - **Threading** — messages carrying a known `external_thread_id` attach to their existing deal (and mark it unread) instead of creating a duplicate.
 - **Real-time UI** — the Kanban board subscribes to Supabase `postgres_changes`; new deals appear instantly, drag-and-drop stage moves are optimistic with rollback.
 - **Voice briefing** — the mic button captures speech (Web Speech API), `/api/voice-summary` feeds unread deals to Gemini for a talent-manager-style script, and the browser reads it back via `speechSynthesis`.
