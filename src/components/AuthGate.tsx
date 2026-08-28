@@ -22,6 +22,17 @@ export default function AuthGate() {
     let mounted = true;
     let sawAuthEvent = false;
 
+    // Failsafe: getSession() can HANG (not just reject) — supabase-js guards
+    // session reads with the Web Locks API, which stalls indefinitely in some
+    // browser contexts (private windows, cross-tab contention, certain mobile
+    // browsers). A hang never triggers .then/.catch, so without this the app is
+    // trapped on the loading spinner forever. Clear loading after 3s no matter
+    // what; the onAuthStateChange listener still updates the session if it later
+    // resolves. Better a login screen than an infinite spinner.
+    const failsafe = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 3000);
+
     supabase.auth
       .getSession()
       .then(({ data }) => {
@@ -42,6 +53,7 @@ export default function AuthGate() {
 
     return () => {
       mounted = false;
+      clearTimeout(failsafe);
       data.subscription.unsubscribe();
     };
   }, []);

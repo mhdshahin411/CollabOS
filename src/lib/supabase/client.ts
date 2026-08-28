@@ -11,6 +11,16 @@ export function getSupabaseBrowser(): SupabaseClient {
     browserClient = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          // Bypass supabase-js's default navigator.locks-based session lock,
+          // which can stall session reads/refreshes indefinitely in some
+          // browser contexts (private windows, cross-tab contention, certain
+          // mobile browsers) — the cause of the app hanging on the loading
+          // spinner. A no-op lock is safe for a single-tab web app.
+          lock: async (_name, _acquireTimeout, fn) => fn(),
+        },
+      },
     );
   }
   return browserClient;
