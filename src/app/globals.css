@@ -49,6 +49,13 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
+/* Opaque (non-transparent) surface — used for the conversation panel. */
+.panel-solid {
+  background: #0e1626;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -18px 0 50px rgba(0, 0, 0, 0.55);
+}
+
 .glass-card {
   background: rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(12px) saturate(120%);

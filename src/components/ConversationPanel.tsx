@@ -110,7 +110,7 @@ export default function ConversationPanel() {
       {/* scrim */}
       <div className="animate-fade-in absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => selectDeal(null)} />
 
-      <aside className="animate-panel-in glass relative flex h-full w-full max-w-md flex-col rounded-l-3xl">
+      <aside className="animate-panel-in panel-solid relative flex h-full w-full max-w-md flex-col rounded-l-3xl">
         {/* Header */}
         <header className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
           <div className="min-w-0">
@@ -149,7 +149,7 @@ export default function ConversationPanel() {
         <div className="scroll-slim flex-1 space-y-5 overflow-y-auto p-5">
           {/* AI summary */}
           {deal.summary && (
-            <section className="glass-soft rounded-2xl p-4">
+            <section className="bg-slate-800 rounded-2xl p-4">
               <h3 className="text-[10px] font-medium uppercase tracking-wider text-sky-300">AI Summary</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{deal.summary}</p>
             </section>
@@ -158,7 +158,7 @@ export default function ConversationPanel() {
           {/* Extracted fields */}
           <section className="grid grid-cols-2 gap-2.5">
             {fields.map((f) => (
-              <div key={f.label} className="glass-soft rounded-xl p-3">
+              <div key={f.label} className="bg-slate-800 rounded-xl p-3">
                 <p className="text-[10px] uppercase tracking-wider text-slate-500">{f.label}</p>
                 <p className="mt-0.5 text-sm font-medium capitalize text-slate-100">{f.value}</p>
               </div>
@@ -182,7 +182,7 @@ export default function ConversationPanel() {
           <section>
             <h3 className="mb-2 text-[10px] font-medium uppercase tracking-wider text-slate-500">Conversation</h3>
             <div className="space-y-2.5">
-              {loadingMessages && <div className="glass-soft h-16 animate-pulse rounded-2xl" />}
+              {loadingMessages && <div className="bg-slate-800 h-16 animate-pulse rounded-2xl" />}
 
               {!loadingMessages && messagesError && (
                 <div role="alert" className="flex items-center gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-sm text-rose-200">
@@ -205,7 +205,7 @@ export default function ConversationPanel() {
                       className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
                         outbound
                           ? "rounded-br-md bg-sky-500/85 text-white"
-                          : "glass-soft rounded-bl-md text-slate-200"
+                          : "bg-slate-800 rounded-bl-md text-slate-200"
                       }`}
                     >
                       <div className={`mb-1 flex items-center gap-2 text-[10px] ${outbound ? "text-sky-100/80" : "text-slate-400"}`}>
@@ -224,7 +224,7 @@ export default function ConversationPanel() {
 
         {/* Composer */}
         <form onSubmit={sendReply} className="border-t border-white/10 p-3">
-          <div className="glass-soft flex items-end gap-2 rounded-2xl p-1.5">
+          <div className="bg-slate-800 flex items-end gap-2 rounded-2xl p-1.5">
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
