@@ -42,6 +42,10 @@ export default function DashboardShell({
     day: "numeric",
   });
 
+  const firstName = email
+    ? email.split("@")[0].split(/[._\-+]/)[0].replace(/^\w/, (c) => c.toUpperCase())
+    : undefined;
+
   return (
     <div className="mx-auto min-h-screen max-w-[1400px] px-4 pb-36 pt-8 sm:px-6 lg:px-8">
       <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6">
@@ -86,7 +90,7 @@ export default function DashboardShell({
       </div>
 
       {/* Floating overlays */}
-      <VoiceAssistant />
+      <VoiceAssistant name={firstName} />
       <ConversationPanel />
     </div>
   );

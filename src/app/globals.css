@@ -76,16 +76,15 @@ body {
 }
 
 /* ---------- Thin custom scrollbars inside glass panels ---------- */
-.scroll-slim::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Hide scrollbars everywhere — content stays scrollable, just no visible bar. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
 }
-.scroll-slim::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-}
-.scroll-slim::-webkit-scrollbar-track {
-  background: transparent;
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome / Safari / Edge */
 }
 
 /* ---------- Slide-in conversation panel ---------- */

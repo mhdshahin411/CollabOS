@@ -31,9 +31,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
   }
 
-  const { query, markAsRead = true } = await req
+  const { query, markAsRead = true, name } = await req
     .json()
-    .catch(() => ({}) as { query?: string; markAsRead?: boolean });
+    .catch(() => ({}) as { query?: string; markAsRead?: boolean; name?: string });
   const question = query?.trim();
   const isQuestion = !!question;
 
@@ -80,19 +80,20 @@ export async function POST(req: NextRequest) {
     }));
   }
 
-  // Only "all caught up" for a plain briefing with no unread deals — never
-  // swallow an actual question.
-  if (!isQuestion && !unread?.length) {
+  // Only skip the AI for a plain, un-named briefing with no unread deals. A
+  // voice greeting (carries `name`) should always greet by name via the AI,
+  // even when caught up; an actual question is never swallowed.
+  if (!isQuestion && !name && !unread?.length) {
     return NextResponse.json({
       briefing: "You're all caught up. No new deals since your last check-in.",
       deal_count: 0,
     });
   }
 
-  // 3. OpenAI answers the question, or produces the daily briefing.
+  // 3. OpenAI greets/answers, or produces the daily briefing.
   let briefing: string;
   try {
-    briefing = await generateVoiceBriefing(contextDeals, question, recentActivity);
+    briefing = await generateVoiceBriefing(contextDeals, question, recentActivity, name?.trim() || undefined);
   } catch (err) {
     console.error("OpenAI briefing failed:", err);
     return NextResponse.json({ error: "Failed to generate briefing" }, { status: 502 });

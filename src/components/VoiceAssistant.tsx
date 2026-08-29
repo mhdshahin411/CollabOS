@@ -24,34 +24,43 @@ interface SpeechRecognitionLike {
   stop: () => void;
 }
 
-export default function VoiceAssistant() {
+export default function VoiceAssistant({ name }: { name?: string }) {
   const [state, setState] = useState<AssistantState>("idle");
   const [briefing, setBriefing] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clapEnabled, setClapEnabled] = useState(false);
   const [clapActive, setClapActive] = useState(false); // mic actually listening
+  const startListeningRef = useRef<() => void>(() => {});
+  const activateRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     return () => window.speechSynthesis?.cancel();
   }, []);
 
-  const speak = useCallback((text: string) => {
+  // Speak `text`; when TTS ends, either listen for a follow-up or go idle.
+  const speak = useCallback((text: string, thenListen = false) => {
+    const done = () => {
+      if (thenListen) startListeningRef.current();
+      else setState("idle");
+    };
     if (!window.speechSynthesis) {
-      setState("idle");
+      done();
       return;
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.05;
-    utterance.onend = () => setState("idle");
-    utterance.onerror = () => setState("idle");
+    utterance.onend = done;
+    utterance.onerror = done;
     setState("speaking");
     window.speechSynthesis.speak(utterance);
   }, []);
 
+  // No `query` -> a greeting + summary (opts.thenListen chains into listening).
+  // With `query` -> an answer to the spoken question, then idle.
   const runBriefing = useCallback(
-    async (query?: string) => {
+    async (query?: string, opts?: { thenListen?: boolean }) => {
       setState("thinking");
       setError(null);
       try {
@@ -71,32 +80,30 @@ export default function VoiceAssistant() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query, name, markAsRead: false }),
         });
         if (!res.ok) throw new Error(`Briefing request failed (${res.status})`);
 
         const data: { briefing: string } = await res.json();
         setBriefing(data.briefing);
-        speak(data.briefing);
+        speak(data.briefing, opts?.thenListen);
       } catch (err) {
         console.error(err);
         setError("Couldn't fetch your briefing. Try again.");
         setState("idle");
       }
     },
-    [speak],
+    [speak, name],
   );
 
   const startListening = useCallback(() => {
     setTranscript(null);
     const recognition = createRecognition();
     if (!recognition) {
-      runBriefing();
+      // No speech recognition — the greeting already played, so just finish.
+      setState("idle");
       return;
     }
-    // A single latch so EXACTLY one of result/error/end drives the outcome —
-    // otherwise a browser that ends the session with no result and no error
-    // would strand the UI on "Thinking…" forever.
     let handled = false;
     recognition.lang = "en-US";
     recognition.interimResults = false;
@@ -105,18 +112,18 @@ export default function VoiceAssistant() {
       handled = true;
       const said = event.results[0][0].transcript;
       setTranscript(said);
-      runBriefing(said);
+      runBriefing(said); // answer, then idle
     };
     recognition.onerror = () => {
       if (!handled) {
         handled = true;
-        runBriefing();
+        setState("idle");
       }
     };
     recognition.onend = () => {
       if (!handled) {
         handled = true;
-        runBriefing();
+        setState("idle");
       }
     };
     setState("listening");
@@ -125,10 +132,24 @@ export default function VoiceAssistant() {
     } catch {
       if (!handled) {
         handled = true;
-        runBriefing();
+        setState("idle");
       }
     }
   }, [runBriefing]);
+
+  useEffect(() => {
+    startListeningRef.current = startListening;
+  }, [startListening]);
+
+  // Activation greets by name + summarizes new pitches immediately (no waiting
+  // for the user to speak), then listens for an optional follow-up question.
+  const activate = useCallback(() => {
+    runBriefing(undefined, { thenListen: true });
+  }, [runBriefing]);
+
+  useEffect(() => {
+    activateRef.current = activate;
+  }, [activate]);
 
   const handleMicClick = useCallback(() => {
     if (state !== "idle") {
@@ -136,14 +157,12 @@ export default function VoiceAssistant() {
       setState("idle");
       return;
     }
-    startListening();
-  }, [state, startListening]);
+    activate();
+  }, [state, activate]);
 
   // -------- Double-clap detection (Web Audio) --------
-  // Keyed on (clapEnabled, state): we only hold the mic while enabled AND idle.
-  // Releasing it the moment the assistant becomes active (a) frees the device so
-  // SpeechRecognition can capture the spoken query without contention, and
-  // (b) stops the analyser during TTS so speaker loopback can't self-trigger.
+  // Only holds the mic while enabled AND idle. Releasing it once the assistant
+  // is active frees the device for SpeechRecognition and stops TTS loopback.
   useEffect(() => {
     if (!clapEnabled || state !== "idle") return;
 
@@ -157,11 +176,11 @@ export default function VoiceAssistant() {
     let lastTrigger = 0;
     const buf = new Float32Array(1024);
 
-    const HIGH = 0.28; // transient peak that counts as a clap
-    const LOW = 0.08; // must fall below this to re-arm
-    const MIN_GAP = 60; // ms — reject same-clap echo, still catch fast double-claps
-    const MAX_GAP = 700; // ms — outer bound of a "double" clap
-    const COOLDOWN = 1500; // ms — ignore repeats right after a trigger
+    const HIGH = 0.28;
+    const LOW = 0.08;
+    const MIN_GAP = 60;
+    const MAX_GAP = 700;
+    const COOLDOWN = 1500;
 
     navigator.mediaDevices
       ?.getUserMedia({ audio: true })
@@ -190,17 +209,17 @@ export default function VoiceAssistant() {
           const now = performance.now();
           if (peak < LOW) armed = true;
           if (armed && peak > HIGH) {
-            armed = false; // refractory until amplitude drops again
+            armed = false;
             const dt = lastClap ? now - lastClap : Infinity;
             if (dt >= MIN_GAP && dt <= MAX_GAP && now - lastTrigger > COOLDOWN) {
               lastTrigger = now;
               lastClap = 0;
               triggered = true;
-              startListening(); // state leaves idle -> this effect tears down the mic
+              activateRef.current(); // greet + summary, then listen
               return;
             }
             if (dt >= MIN_GAP) {
-              lastClap = now; // a fresh first clap (too-fast transients are ignored)
+              lastClap = now;
             }
           }
           raf = requestAnimationFrame(loop);
@@ -221,7 +240,7 @@ export default function VoiceAssistant() {
       ctx?.close().catch(() => {});
       setClapActive(false);
     };
-  }, [clapEnabled, state, startListening]);
+  }, [clapEnabled, state]);
 
   const dismiss = () => {
     window.speechSynthesis?.cancel();
@@ -238,7 +257,7 @@ export default function VoiceAssistant() {
         ? "Thinking…"
         : state === "speaking"
           ? "Speaking — tap to stop"
-          : "Ask for your briefing";
+          : "Tap for your briefing";
 
   const panelOpen = state !== "idle" || !!briefing || !!error;
 
@@ -267,7 +286,7 @@ export default function VoiceAssistant() {
           ) : briefing ? (
             <p className="text-sm leading-relaxed text-slate-100">{briefing}</p>
           ) : (
-            <p className="text-sm text-slate-400">Your talent-manager briefing will appear here.</p>
+            <p className="text-sm text-slate-400">Greeting you and summarizing your pipeline…</p>
           )}
         </div>
       )}

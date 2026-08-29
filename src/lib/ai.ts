@@ -152,7 +152,7 @@ const BRIEFING_SYSTEM_PROMPT = `You are the user's sharp, upbeat talent manager.
 
 If the user asked a SPECIFIC QUESTION, answer THAT question directly using the deals and recent activity provided (for example: "the last activity was Priya from GlowCosmetics messaging about the reel", or "you have two deals in negotiating"). Do not fall back to a generic briefing.
 
-If there is no specific question, give a short morning briefing: lead with the headline numbers (new deals and total money on the table), call out high-priority deals and tight deadlines by brand name, and end with one concrete next action.
+If there is no specific question, GREET the user by their first name (when one is provided) and give a short summary: lead with the headline numbers (new/unread pitches and total money on the table), call out any high-priority deal or tight deadline by brand name, and end with one concrete next action. If there are no new pitches, greet them warmly and say they're all caught up.
 
 Only use the data provided. If the answer genuinely isn't in the data, say so in one short sentence.`;
 
@@ -160,6 +160,7 @@ export async function generateVoiceBriefing(
   deals: Deal[],
   userQuery?: string,
   recentActivity?: ActivityItem[],
+  userName?: string,
 ): Promise<string> {
   const dealDigest = deals.map((d) => ({
     brand: d.brand_name,
@@ -187,8 +188,8 @@ export async function generateVoiceBriefing(
       { role: "system", content: BRIEFING_SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Deals (JSON):\n${JSON.stringify(dealDigest, null, 2)}${activityText}\n\n${
-          question ? `The user asked: "${question}"` : "No specific question — give the daily briefing."
+        content: `${userName ? `The user's first name is "${userName}".\n` : ""}Deals (JSON):\n${JSON.stringify(dealDigest, null, 2)}${activityText}\n\n${
+          question ? `The user asked: "${question}"` : "No specific question — greet them by name and give a quick summary of any new pitches."
         }`,
       },
     ],
