@@ -6,6 +6,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/client";
 import { DealsProvider } from "@/lib/dealsStore";
 import DashboardShell from "./DashboardShell";
 import LoginForm from "./LoginForm";
+import type { ChannelAccounts } from "./SettingsModal";
 
 /**
  * Gates the whole dashboard behind a Supabase session.
@@ -74,9 +75,11 @@ export default function AuthGate() {
     return <LoginForm />;
   }
 
+  const accounts = (session.user.user_metadata?.channel_accounts ?? {}) as ChannelAccounts;
+
   return (
     <DealsProvider>
-      <DashboardShell email={session.user.email} onSignOut={signOut} />
+      <DashboardShell email={session.user.email} onSignOut={signOut} accounts={accounts} />
     </DealsProvider>
   );
 }

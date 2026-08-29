@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useDeals, type ChannelFilter } from "@/lib/dealsStore";
 import { STAGES, CHANNEL_LABELS, type Channel } from "@/lib/types";
 import { ChannelIcon } from "./DealCard";
+import SettingsModal, { type ChannelAccounts } from "./SettingsModal";
 
 const CHANNELS: Channel[] = ["gmail", "instagram", "whatsapp"];
 
@@ -27,8 +29,17 @@ function displayName(email?: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function Sidebar({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
+export default function Sidebar({
+  email,
+  onSignOut,
+  accounts = {},
+}: {
+  email?: string;
+  onSignOut: () => void;
+  accounts?: ChannelAccounts;
+}) {
   const { deals, channelFilter, setChannelFilter } = useDeals();
+  const [showSettings, setShowSettings] = useState(false);
 
   const totalValue = deals.reduce((s, d) => s + (d.budget ?? 0), 0);
   const unread = deals.filter((d) => !d.is_read).length;
@@ -97,7 +108,19 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
 
       {/* Connected accounts (also filters the board) */}
       <div>
-        <p className="mb-2.5 px-1 text-[10px] uppercase tracking-wider text-slate-500">Connected accounts</p>
+        <div className="mb-2.5 flex items-center justify-between px-1">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Connected accounts</p>
+          <button
+            onClick={() => setShowSettings(true)}
+            aria-label="Edit connected accounts"
+            className="text-slate-500 transition-colors hover:text-slate-200"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+          </button>
+        </div>
         <div className="space-y-1">
           <button
             onClick={() => setChannelFilter("all")}
@@ -117,7 +140,7 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
             // The connected account. Gmail's is the user's login email (the inbox
             // n8n polls); the Instagram handle / WhatsApp number aren't captured
             // in the app yet (they live in the n8n credentials).
-            const account = connected ? (c === "gmail" ? email : "Linked via n8n") : null;
+            const account = accounts[c] || (connected ? (c === "gmail" ? email : "Linked via n8n") : null);
             return (
               <button
                 key={c}
@@ -152,6 +175,8 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
           Sign out
         </button>
       </div>
+
+      {showSettings && <SettingsModal accounts={accounts} onClose={() => setShowSettings(false)} />}
     </aside>
   );
 }

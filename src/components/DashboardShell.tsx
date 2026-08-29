@@ -7,6 +7,7 @@ import DailySummary from "./DailySummary";
 import Analytics from "./Analytics";
 import VoiceAssistant from "./VoiceAssistant";
 import ConversationPanel from "./ConversationPanel";
+import type { ChannelAccounts } from "./SettingsModal";
 
 function HeroStatus() {
   const { deals, loading } = useDeals();
@@ -24,7 +25,15 @@ function HeroStatus() {
   return <p className="font-display text-3xl leading-tight text-white sm:text-4xl">{headline}</p>;
 }
 
-export default function DashboardShell({ email, onSignOut }: { email?: string; onSignOut: () => void }) {
+export default function DashboardShell({
+  email,
+  onSignOut,
+  accounts,
+}: {
+  email?: string;
+  onSignOut: () => void;
+  accounts?: ChannelAccounts;
+}) {
   const { query, setQuery } = useDeals();
 
   const today = new Date().toLocaleDateString("en-US", {
@@ -36,7 +45,7 @@ export default function DashboardShell({ email, onSignOut }: { email?: string; o
   return (
     <div className="mx-auto min-h-screen max-w-[1400px] px-4 pb-36 pt-8 sm:px-6 lg:px-8">
       <div className="lg:grid lg:grid-cols-[300px_1fr] lg:gap-6">
-        <Sidebar email={email} onSignOut={onSignOut} />
+        <Sidebar email={email} onSignOut={onSignOut} accounts={accounts} />
 
         <main className="mt-6 space-y-6 lg:mt-0">
           {/* Top bar */}
