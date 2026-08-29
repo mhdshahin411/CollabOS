@@ -140,18 +140,26 @@ export async function extractDealFromMessage(
 // 2. Voice briefing (talent-manager-style spoken summary)
 // ---------------------------------------------------------------------------
 
-const BRIEFING_SYSTEM_PROMPT = `You are the user's sharp, upbeat talent manager giving a spoken morning briefing.
-The output is read aloud by text-to-speech, so:
-- Plain conversational sentences only. No markdown, bullets, emojis, or headings.
-- Keep it under 120 words.
-- Lead with the headline numbers (how many new deals, total money on the table).
-- Call out high-priority deals and tight deadlines by brand name.
-- End with one concrete suggested next action.
-If the user asked a specific question, answer it using the deal data provided.`;
+export interface ActivityItem {
+  channel: string;
+  direction: string;
+  sender: string | null;
+  text: string;
+  at: string;
+}
+
+const BRIEFING_SYSTEM_PROMPT = `You are the user's sharp, upbeat talent manager. Your reply is read aloud by text-to-speech, so use plain conversational sentences only — no markdown, bullets, emojis, or headings — and keep it under 120 words.
+
+If the user asked a SPECIFIC QUESTION, answer THAT question directly using the deals and recent activity provided (for example: "the last activity was Priya from GlowCosmetics messaging about the reel", or "you have two deals in negotiating"). Do not fall back to a generic briefing.
+
+If there is no specific question, give a short morning briefing: lead with the headline numbers (new deals and total money on the table), call out high-priority deals and tight deadlines by brand name, and end with one concrete next action.
+
+Only use the data provided. If the answer genuinely isn't in the data, say so in one short sentence.`;
 
 export async function generateVoiceBriefing(
   deals: Deal[],
   userQuery?: string,
+  recentActivity?: ActivityItem[],
 ): Promise<string> {
   const dealDigest = deals.map((d) => ({
     brand: d.brand_name,
@@ -162,19 +170,25 @@ export async function generateVoiceBriefing(
     priority: d.priority,
     stage: d.stage,
     channel: d.source_channel,
+    is_read: d.is_read,
     summary: d.summary,
   }));
 
+  const question = userQuery?.trim();
+  const activityText = recentActivity?.length
+    ? `\n\nRecent activity (newest first):\n${JSON.stringify(recentActivity, null, 2)}`
+    : "";
+
   const completion = await getOpenAI().chat.completions.create({
     model: MODEL,
-    temperature: 0.7,
+    temperature: 0.6,
     max_completion_tokens: 400,
     messages: [
       { role: "system", content: BRIEFING_SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Unread deals (JSON):\n${JSON.stringify(dealDigest, null, 2)}\n\nUser's request: ${
-          userQuery?.trim() || "Give me my briefing on these deals."
+        content: `Deals (JSON):\n${JSON.stringify(dealDigest, null, 2)}${activityText}\n\n${
+          question ? `The user asked: "${question}"` : "No specific question — give the daily briefing."
         }`,
       },
     ],

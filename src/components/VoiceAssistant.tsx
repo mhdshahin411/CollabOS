@@ -246,7 +246,7 @@ export default function VoiceAssistant() {
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex flex-col items-center gap-3">
       {/* The "screen" — briefing panel above the button */}
       {panelOpen && (
-        <div className="animate-panel-in glass pointer-events-auto w-[min(92vw,30rem)] rounded-3xl p-4">
+        <div className="animate-panel-in panel-solid pointer-events-auto w-[min(92vw,30rem)] rounded-3xl p-4">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="flex items-center gap-2 text-xs font-medium text-sky-300">
               <span className="relative flex h-2 w-2">
@@ -278,7 +278,7 @@ export default function VoiceAssistant() {
           onClick={() => setClapEnabled((v) => !v)}
           title="Activate the assistant by clapping twice"
           className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition-all ${
-            clapEnabled ? "border border-sky-400/50 bg-sky-500/15 text-sky-200" : "glass-soft text-slate-300 hover:text-white"
+            clapEnabled ? "border border-sky-400/50 bg-sky-500/15 text-sky-200" : "bg-slate-800 text-slate-300 hover:text-white"
           }`}
         >
           <span className="relative flex h-1.5 w-1.5">
@@ -293,7 +293,7 @@ export default function VoiceAssistant() {
           aria-label={label}
           className={`relative grid h-14 w-14 place-items-center rounded-full shadow-xl transition-all ${
             state === "idle"
-              ? "glass text-slate-100 hover:text-white hover:shadow-sky-500/20"
+              ? "bg-slate-800 text-slate-100 hover:text-white hover:shadow-sky-500/20"
               : "border border-sky-400/50 bg-sky-500/80 text-white shadow-sky-500/30"
           }`}
         >
