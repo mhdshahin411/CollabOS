@@ -16,6 +16,7 @@ export default function ConversationPanel() {
   const [reloadKey, setReloadKey] = useState(0);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<string | null>(null);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   // Load the raw thread whenever the open deal changes.
@@ -66,25 +67,43 @@ export default function ConversationPanel() {
     const text = draft.trim();
     if (!text || !deal || sending) return;
     setSending(true);
+    setSendNote(null);
 
-    const { data, error } = await getSupabaseBrowser()
-      .from("messages")
-      .insert({
-        deal_id: deal.id,
-        user_id: deal.user_id,
-        channel: deal.source_channel,
-        direction: "outbound",
-        sender: "You",
-        raw_text: text,
-      })
-      .select("*")
-      .single();
+    try {
+      const {
+        data: { session },
+      } = await getSupabaseBrowser().auth.getSession();
+      if (!session) {
+        setSendNote("Sign in again to reply.");
+        setSending(false);
+        return;
+      }
 
-    if (error) {
-      console.error("Failed to send reply:", error);
-    } else if (data) {
-      setMessages((prev) => [...prev, data as Message]);
-      setDraft("");
+      const res = await fetch("/api/reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ deal_id: deal.id, text }),
+      });
+      const data: {
+        message?: Message;
+        sent?: boolean;
+        send_error?: string | null;
+        error?: string;
+      } = await res.json();
+
+      if (!res.ok) {
+        setSendNote(data.error ?? "Couldn't send. Try again.");
+      } else {
+        if (data.message) setMessages((prev) => [...prev, data.message as Message]);
+        setDraft("");
+        setSendNote(data.sent ? "Sent to the brand ✓" : data.send_error ?? "Recorded on the thread.");
+      }
+    } catch (err) {
+      console.error("Failed to send reply:", err);
+      setSendNote("Couldn't send. Try again.");
     }
     setSending(false);
   }
@@ -246,7 +265,11 @@ export default function ConversationPanel() {
               {sending ? "…" : "Send"}
             </button>
           </div>
-          <p className="px-2 pt-1.5 text-[10px] text-slate-500">Recorded on the thread. Outbound delivery via n8n is not wired yet.</p>
+          {sendNote ? (
+            <p className={`px-2 pt-1.5 text-[10px] ${sendNote.includes("✓") ? "text-emerald-400" : "text-slate-500"}`}>{sendNote}</p>
+          ) : (
+            <p className="px-2 pt-1.5 text-[10px] text-slate-500">Gmail replies send to the brand on the original thread. Other channels are recorded only.</p>
+          )}
         </form>
       </aside>
     </div>
