@@ -32,35 +32,31 @@ export default function VoiceAssistant({ name }: { name?: string }) {
   const [clapEnabled, setClapEnabled] = useState(false);
   const [clapActive, setClapActive] = useState(false); // mic actually listening
   const startListeningRef = useRef<() => void>(() => {});
-  const activateRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     return () => window.speechSynthesis?.cancel();
   }, []);
 
-  // Speak `text`; when TTS ends, either listen for a follow-up or go idle.
-  const speak = useCallback((text: string, thenListen = false) => {
-    const done = () => {
-      if (thenListen) startListeningRef.current();
-      else setState("idle");
-    };
+  // Speak `text`, then return to idle. (No auto-listen — that caused the mic to
+  // re-trigger on the assistant's own voice.)
+  const speak = useCallback((text: string) => {
     if (!window.speechSynthesis) {
-      done();
+      setState("idle");
       return;
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.05;
-    utterance.onend = done;
-    utterance.onerror = done;
+    utterance.onend = () => setState("idle");
+    utterance.onerror = () => setState("idle");
     setState("speaking");
     window.speechSynthesis.speak(utterance);
   }, []);
 
-  // No `query` -> a greeting + summary (opts.thenListen chains into listening).
-  // With `query` -> an answer to the spoken question, then idle.
+  // No `query` -> a greeting + summary (the Briefing button).
+  // With `query` -> an answer to the spoken question (the mic).
   const runBriefing = useCallback(
-    async (query?: string, opts?: { thenListen?: boolean }) => {
+    async (query?: string) => {
       setState("thinking");
       setError(null);
       try {
@@ -86,7 +82,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
 
         const data: { briefing: string } = await res.json();
         setBriefing(data.briefing);
-        speak(data.briefing, opts?.thenListen);
+        speak(data.briefing);
       } catch (err) {
         console.error(err);
         setError("Couldn't fetch your briefing. Try again.");
@@ -96,12 +92,14 @@ export default function VoiceAssistant({ name }: { name?: string }) {
     [speak, name],
   );
 
+  // Listen for a spoken question, then answer it.
   const startListening = useCallback(() => {
+    setBriefing(null);
     setTranscript(null);
     const recognition = createRecognition();
     if (!recognition) {
-      // No speech recognition — the greeting already played, so just finish.
-      setState("idle");
+      // No speech recognition available — fall back to the spoken briefing.
+      runBriefing();
       return;
     }
     let handled = false;
@@ -112,7 +110,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
       handled = true;
       const said = event.results[0][0].transcript;
       setTranscript(said);
-      runBriefing(said); // answer, then idle
+      runBriefing(said);
     };
     recognition.onerror = () => {
       if (!handled) {
@@ -141,28 +139,30 @@ export default function VoiceAssistant({ name }: { name?: string }) {
     startListeningRef.current = startListening;
   }, [startListening]);
 
-  // Activation greets by name + summarizes new pitches immediately (no waiting
-  // for the user to speak), then listens for an optional follow-up question.
-  const activate = useCallback(() => {
-    runBriefing(undefined, { thenListen: true });
-  }, [runBriefing]);
-
-  useEffect(() => {
-    activateRef.current = activate;
-  }, [activate]);
-
+  // Mic button: if busy, stop; otherwise start listening for a question.
   const handleMicClick = useCallback(() => {
     if (state !== "idle") {
       window.speechSynthesis?.cancel();
       setState("idle");
       return;
     }
-    activate();
-  }, [state, activate]);
+    startListening();
+  }, [state, startListening]);
+
+  // Briefing button: greet by name + summarize new pitches.
+  const handleBriefingClick = useCallback(() => {
+    if (state !== "idle") {
+      window.speechSynthesis?.cancel();
+      setState("idle");
+      return;
+    }
+    runBriefing();
+  }, [state, runBriefing]);
 
   // -------- Double-clap detection (Web Audio) --------
-  // Only holds the mic while enabled AND idle. Releasing it once the assistant
-  // is active frees the device for SpeechRecognition and stops TTS loopback.
+  // A double-clap opens the mic to ask a question. Only holds the mic while
+  // enabled AND idle, so it releases the moment the assistant becomes active
+  // (frees the device for SpeechRecognition, stops TTS loopback).
   useEffect(() => {
     if (!clapEnabled || state !== "idle") return;
 
@@ -215,7 +215,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
               lastTrigger = now;
               lastClap = 0;
               triggered = true;
-              activateRef.current(); // greet + summary, then listen
+              startListeningRef.current(); // clap -> ask a question
               return;
             }
             if (dt >= MIN_GAP) {
@@ -252,18 +252,18 @@ export default function VoiceAssistant({ name }: { name?: string }) {
 
   const label =
     state === "listening"
-      ? "Listening…"
+      ? "Listening — ask your question…"
       : state === "thinking"
         ? "Thinking…"
         : state === "speaking"
           ? "Speaking — tap to stop"
-          : "Tap for your briefing";
+          : "Voice assistant";
 
   const panelOpen = state !== "idle" || !!briefing || !!error;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex flex-col items-center gap-3">
-      {/* The "screen" — briefing panel above the button */}
+      {/* The "screen" — panel above the buttons */}
       {panelOpen && (
         <div className="animate-panel-in panel-solid pointer-events-auto w-[min(92vw,30rem)] rounded-3xl p-4">
           <div className="mb-1.5 flex items-center justify-between">
@@ -285,8 +285,10 @@ export default function VoiceAssistant({ name }: { name?: string }) {
             <p className="text-sm text-rose-300">{error}</p>
           ) : briefing ? (
             <p className="text-sm leading-relaxed text-slate-100">{briefing}</p>
+          ) : state === "listening" ? (
+            <p className="text-sm text-slate-400">Go ahead — ask about your deals.</p>
           ) : (
-            <p className="text-sm text-slate-400">Greeting you and summarizing your pipeline…</p>
+            <p className="text-sm text-slate-400">One moment…</p>
           )}
         </div>
       )}
@@ -295,7 +297,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
       <div className="pointer-events-auto flex items-center gap-2.5">
         <button
           onClick={() => setClapEnabled((v) => !v)}
-          title="Activate the assistant by clapping twice"
+          title="Double-clap to open the mic"
           className={`flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium transition-all ${
             clapEnabled ? "border border-sky-400/50 bg-sky-500/15 text-sky-200" : "bg-slate-800 text-slate-300 hover:text-white"
           }`}
@@ -307,9 +309,23 @@ export default function VoiceAssistant({ name }: { name?: string }) {
           Clap ×2
         </button>
 
+        {/* Briefing: greet by name + summarize */}
+        <button
+          onClick={handleBriefingClick}
+          title="Hear your briefing"
+          className="flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 transition-all hover:text-white"
+        >
+          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+            <path d="M4 5h16v10H7l-3 3V5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          </svg>
+          Briefing
+        </button>
+
+        {/* Mic: ask a question */}
         <button
           onClick={handleMicClick}
-          aria-label={label}
+          aria-label={state === "listening" ? "Listening" : "Ask a question"}
+          title="Ask a question"
           className={`relative grid h-14 w-14 place-items-center rounded-full shadow-xl transition-all ${
             state === "idle"
               ? "bg-slate-800 text-slate-100 hover:text-white hover:shadow-sky-500/20"
