@@ -114,22 +114,29 @@ export default function Sidebar({ email, onSignOut }: { email?: string; onSignOu
             const count = channelCount(c);
             const connected = count > 0;
             const isActive = channelFilter === c;
+            // The connected account. Gmail's is the user's login email (the inbox
+            // n8n polls); the Instagram handle / WhatsApp number aren't captured
+            // in the app yet (they live in the n8n credentials).
+            const account = connected ? (c === "gmail" ? email : "Linked via n8n") : null;
             return (
               <button
                 key={c}
                 onClick={() => setChannelFilter(c)}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm transition-colors ${
-                  isActive ? "bg-white/10 text-white ring-1 ring-white/15" : "text-slate-300 hover:bg-white/5"
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                  isActive ? "bg-white/10 ring-1 ring-white/15" : "hover:bg-white/5"
                 }`}
               >
-                <ChannelIcon channel={c} />
-                <span className="flex-1 text-left">
-                  {CHANNEL_LABELS[c]}
-                  <span className={`ml-2 text-[10px] ${connected ? "text-emerald-400" : "text-slate-600"}`}>
-                    {connected ? "● active" : "○ not linked"}
+                <ChannelIcon channel={c} className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 text-sm text-slate-200">
+                    {CHANNEL_LABELS[c]}
+                    <span className={`text-[10px] ${connected ? "text-emerald-400" : "text-slate-600"}`}>
+                      {connected ? "● active" : "○ not linked"}
+                    </span>
                   </span>
+                  {account && <span className="mt-0.5 block truncate text-[11px] text-slate-500">{account}</span>}
                 </span>
-                <span className="text-xs tabular-nums text-slate-500">{count}</span>
+                <span className="self-center text-xs tabular-nums text-slate-500">{count}</span>
               </button>
             );
           })}
