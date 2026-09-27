@@ -2,6 +2,8 @@ export type DealStage = "new_pitch" | "negotiating" | "drafting" | "completed";
 export type DealPriority = "low" | "medium" | "high";
 export type Channel = "gmail" | "instagram" | "whatsapp";
 export type MessageDirection = "inbound" | "outbound";
+/** Outbound replies only (see migration 0002); null for inbound messages. */
+export type DeliveryStatus = "unconfirmed" | "sent" | "failed" | "not_sent";
 
 export interface Deal {
   id: string;
@@ -30,6 +32,7 @@ export interface Message {
   direction: MessageDirection;
   sender: string | null;
   raw_text: string;
+  delivery_status: DeliveryStatus | null;
   external_message_id: string | null;
   external_thread_id: string | null;
   received_at: string;

@@ -9,8 +9,9 @@ export interface ChannelAccounts {
   whatsapp?: string | null;
 }
 
-// Where the real Gmail OAuth connection is reconnected (Google sign-in lives here).
-const N8N_GMAIL_WORKFLOW = "https://shain411.app.n8n.cloud/workflow/GJPRtpjfB2rleTpR";
+// Where the real Gmail OAuth connection is reconnected (Google sign-in lives
+// there). Optional — without it the note just points at n8n.
+const N8N_GMAIL_WORKFLOW = process.env.NEXT_PUBLIC_N8N_GMAIL_WORKFLOW_URL;
 
 const FIELDS: { key: keyof ChannelAccounts; label: string; placeholder: string }[] = [
   { key: "gmail", label: "Gmail address", placeholder: "you@gmail.com" },
@@ -83,8 +84,11 @@ export default function SettingsModal({
         <div className="space-y-4">
           {FIELDS.map((f) => (
             <div key={f.key}>
-              <label className="mb-1.5 block text-xs font-medium text-slate-300">{f.label}</label>
+              <label htmlFor={`account-${f.key}`} className="mb-1.5 block text-xs font-medium text-slate-300">
+                {f.label}
+              </label>
               <input
+                id={`account-${f.key}`}
                 value={values[f.key] ?? ""}
                 onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 placeholder={f.placeholder}
@@ -99,15 +103,22 @@ export default function SettingsModal({
         {/* Reconnect note — the real inbox connection lives in n8n. */}
         <div className="mt-5 rounded-2xl bg-slate-800 p-3.5 text-xs leading-relaxed text-slate-400">
           These are display labels. To change the <span className="text-slate-200">actual inbox</span> that feeds your
-          deals, reconnect Gmail in n8n (Google sign-in happens there) →{" "}
-          <a
-            href={N8N_GMAIL_WORKFLOW}
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-sky-300 underline hover:text-sky-200"
-          >
-            Reconnect in n8n
-          </a>
+          deals, reconnect Gmail in n8n (Google sign-in happens there)
+          {N8N_GMAIL_WORKFLOW ? (
+            <>
+              {" "}→{" "}
+              <a
+                href={N8N_GMAIL_WORKFLOW}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-sky-300 underline hover:text-sky-200"
+              >
+                Reconnect in n8n
+              </a>
+            </>
+          ) : (
+            "."
+          )}
         </div>
 
         <div className="mt-5 flex justify-end gap-2.5">
