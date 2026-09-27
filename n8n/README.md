@@ -31,6 +31,16 @@ Every channel workflow ends in an **HTTP Request** node:
   ```
   `external_message_id` is what makes n8n retries safe — always send it.
 
+## Outbound replies (Gmail)
+Replies written in the dashboard reach n8n through a **Webhook** trigger
+(`POST`, e.g. path `collabos-reply`) whose production URL goes in the app's
+`N8N_OUTBOUND_WEBHOOK_URL`. The app sends the `x-webhook-secret` header (check it
+in the workflow) and `{ "channel": "gmail", "message_id", "text", "deal_id" }`.
+Wire it to a Gmail **Reply to a message** node on `message_id`, then a
+**Respond to Webhook** node — set the trigger to respond via that node, so a 2xx
+means the email actually went out. See the main README for how the app records
+each outcome.
+
 ## Real Gmail / Instagram / WhatsApp webhooks
 Meta and Google must reach n8n over the public internet. For local dev, tunnel:
 ```bash
