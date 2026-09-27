@@ -75,16 +75,23 @@ body {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.42);
 }
 
-/* ---------- Thin custom scrollbars inside glass panels ---------- */
-/* Hide scrollbars everywhere — content stays scrollable, just no visible bar. */
+/* ---------- Thin, low-contrast scrollbars ---------- */
+/* Quiet enough for the glass look, but still there — a hidden scrollbar hides
+   that a panel scrolls at all, and leaves mouse users nothing to drag. */
 * {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* old Edge/IE */
+  scrollbar-width: thin; /* Firefox, Chrome 121+ */
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none; /* Chrome / Safari / Edge */
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* ---------- Slide-in conversation panel ---------- */

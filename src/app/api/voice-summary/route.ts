@@ -31,9 +31,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired session" }, { status: 401 });
   }
 
-  const { query, markAsRead = true, name } = await req
-    .json()
-    .catch(() => ({}) as { query?: string; markAsRead?: boolean; name?: string });
+  // An empty or non-JSON body means "no options"; anything else must be an
+  // object of the right shape (a bad value would otherwise throw → 500).
+  const body: unknown = await req.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "Body must be a JSON object" }, { status: 400 });
+  }
+  const { query, markAsRead = true, name } = body as Record<string, unknown>;
+  if (
+    (query != null && typeof query !== "string") ||
+    (name != null && typeof name !== "string") ||
+    typeof markAsRead !== "boolean"
+  ) {
+    return NextResponse.json({ error: "query and name must be strings; markAsRead a boolean" }, { status: 400 });
+  }
   const question = query?.trim();
   const isQuestion = !!question;
 

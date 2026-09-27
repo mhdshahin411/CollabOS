@@ -34,7 +34,7 @@ export default function DashboardShell({
   onSignOut: () => void;
   accounts?: ChannelAccounts;
 }) {
-  const { query, setQuery } = useDeals();
+  const { query, setQuery, selectedDealId } = useDeals();
 
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -91,7 +91,9 @@ export default function DashboardShell({
 
       {/* Floating overlays */}
       <VoiceAssistant name={firstName} />
-      <ConversationPanel />
+      {/* Keyed per deal: switching deals starts from a clean thread and an empty
+          draft instead of showing (and sending) the previous deal's. */}
+      <ConversationPanel key={selectedDealId ?? "closed"} />
     </div>
   );
 }

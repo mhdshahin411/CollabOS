@@ -2,24 +2,12 @@
 
 import { useState } from "react";
 import { useDeals, type ChannelFilter } from "@/lib/dealsStore";
+import { formatMoney, totalsByCurrency } from "@/lib/money";
 import { STAGES, CHANNEL_LABELS, type Channel } from "@/lib/types";
 import { ChannelIcon } from "./DealCard";
 import SettingsModal, { type ChannelAccounts } from "./SettingsModal";
 
 const CHANNELS: Channel[] = ["gmail", "instagram", "whatsapp"];
-
-function currency(n: number): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      notation: n >= 100000 ? "compact" : "standard",
-      maximumFractionDigits: n >= 100000 ? 1 : 0,
-    }).format(n);
-  } catch {
-    return `$${n}`;
-  }
-}
 
 function displayName(email?: string): string {
   if (!email) return "Your workspace";
@@ -41,16 +29,19 @@ export default function Sidebar({
   const { deals, channelFilter, setChannelFilter } = useDeals();
   const [showSettings, setShowSettings] = useState(false);
 
-  const totalValue = deals.reduce((s, d) => s + (d.budget ?? 0), 0);
+  const activeDeals = deals.filter((d) => d.stage !== "completed");
+  // Open deals only, one total per currency: the headline is the most-used
+  // currency, any others are listed under it.
+  const [primary = { currency: "USD", total: 0 }, ...otherTotals] = totalsByCurrency(activeDeals);
   const unread = deals.filter((d) => !d.is_read).length;
-  const active = deals.filter((d) => d.stage !== "completed").length;
+  const active = activeDeals.length;
   const maxStage = Math.max(1, ...STAGES.map((s) => deals.filter((d) => d.stage === s.id).length));
 
   const channelCount = (c: ChannelFilter) =>
     c === "all" ? deals.length : deals.filter((d) => d.source_channel === c).length;
 
   return (
-    <aside className="glass flex flex-col gap-5 rounded-3xl p-5 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto scroll-slim">
+    <aside className="glass flex flex-col gap-5 rounded-3xl p-5 lg:sticky lg:top-8 lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto">
       {/* Brand */}
       <div className="px-1 pt-1">
         <h1 className="font-display text-2xl text-white">CollabOS</h1>
@@ -71,7 +62,14 @@ export default function Sidebar({
       {/* Pipeline value */}
       <div className="glass-soft rounded-2xl p-4">
         <p className="text-[10px] uppercase tracking-wider text-slate-400">Pipeline value</p>
-        <p className="font-display mt-1 text-4xl leading-none text-white">{currency(totalValue)}</p>
+        <p className="font-display mt-1 text-4xl leading-none text-white">
+          {formatMoney(primary.total, primary.currency, { compact: true })}
+        </p>
+        {otherTotals.length > 0 && (
+          <p className="mt-1.5 text-xs text-slate-300">
+            + {otherTotals.map((t) => formatMoney(t.total, t.currency, { compact: true })).join(" · ")}
+          </p>
+        )}
         <div className="mt-3 flex items-center gap-4 text-xs text-slate-400">
           <span>
             <span className="text-slate-100">{active}</span> active

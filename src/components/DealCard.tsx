@@ -1,6 +1,7 @@
 "use client";
 
 import type { DragEvent } from "react";
+import { formatBudget } from "@/lib/money";
 import { CHANNEL_LABELS, type Channel, type Deal } from "@/lib/types";
 
 const PRIORITY_STYLES: Record<Deal["priority"], string> = {
@@ -8,19 +9,6 @@ const PRIORITY_STYLES: Record<Deal["priority"], string> = {
   medium: "bg-amber-400/15 text-amber-200 ring-amber-300/25",
   low: "bg-slate-400/10 text-slate-300 ring-slate-300/20",
 };
-
-export function formatBudget(deal: Deal): string | null {
-  if (deal.budget == null) return null;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: deal.currency ?? "USD",
-      maximumFractionDigits: 0,
-    }).format(deal.budget);
-  } catch {
-    return `${deal.budget} ${deal.currency ?? ""}`.trim();
-  }
-}
 
 export function ChannelIcon({ channel, className = "h-3.5 w-3.5" }: { channel: Channel; className?: string }) {
   if (channel === "gmail") {
@@ -69,10 +57,18 @@ export default function DealCard({
   return (
     <div
       draggable
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`glass-card group cursor-grab rounded-2xl p-3.5 active:cursor-grabbing ${
+      className={`glass-card group cursor-grab rounded-2xl p-3.5 outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 active:cursor-grabbing ${
         isDragging ? "rotate-1 opacity-50" : ""
       } ${isActive ? "!border-sky-400/40 ring-1 ring-sky-400/30" : ""}`}
     >

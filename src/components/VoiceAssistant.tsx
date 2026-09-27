@@ -22,6 +22,7 @@ interface SpeechRecognitionLike {
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
+  abort: () => void;
 }
 
 export default function VoiceAssistant({ name }: { name?: string }) {
@@ -33,8 +34,33 @@ export default function VoiceAssistant({ name }: { name?: string }) {
   const [clapActive, setClapActive] = useState(false); // mic actually listening
   const startListeningRef = useRef<() => void>(() => {});
 
+  // Each listen/briefing takes a new turn number; stopping bumps it too. Async
+  // results (a fetch resolving, a recognition result, a TTS end event) only
+  // apply while their turn is still current — so Stop really stops.
+  const turnRef = useRef(0);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // End whatever is in flight: pending request, open mic, speech.
+  const stopAll = useCallback(() => {
+    turnRef.current++;
+    fetchAbortRef.current?.abort();
+    fetchAbortRef.current = null;
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    utteranceRef.current = null;
+    window.speechSynthesis?.cancel();
+    setState("idle");
+  }, []);
+
   useEffect(() => {
-    return () => window.speechSynthesis?.cancel();
+    return () => {
+      turnRef.current++;
+      fetchAbortRef.current?.abort();
+      recognitionRef.current?.abort();
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   // Speak `text`, then return to idle. (No auto-listen — that caused the mic to
@@ -44,11 +70,20 @@ export default function VoiceAssistant({ name }: { name?: string }) {
       setState("idle");
       return;
     }
-    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.05;
-    utterance.onend = () => setState("idle");
-    utterance.onerror = () => setState("idle");
+    // Only this utterance's end counts: cancel() below fires the previous
+    // one's end event too. Holding it in a ref also keeps Chrome from
+    // garbage-collecting it mid-speech, which drops the end event entirely.
+    const done = () => {
+      if (utteranceRef.current !== utterance) return;
+      utteranceRef.current = null;
+      setState("idle");
+    };
+    utterance.onend = done;
+    utterance.onerror = done;
+    utteranceRef.current = utterance;
+    window.speechSynthesis.cancel();
     setState("speaking");
     window.speechSynthesis.speak(utterance);
   }, []);
@@ -57,6 +92,11 @@ export default function VoiceAssistant({ name }: { name?: string }) {
   // With `query` -> an answer to the spoken question (the mic).
   const runBriefing = useCallback(
     async (query?: string) => {
+      const turn = ++turnRef.current;
+      const isCurrent = () => turnRef.current === turn;
+      fetchAbortRef.current?.abort();
+      const controller = new AbortController();
+      fetchAbortRef.current = controller;
       setState("thinking");
       setError(null);
       try {
@@ -64,6 +104,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
         const {
           data: { session },
         } = await supabase.auth.getSession();
+        if (!isCurrent()) return;
         if (!session) {
           setError("Sign in to hear your briefing.");
           setState("idle");
@@ -77,13 +118,16 @@ export default function VoiceAssistant({ name }: { name?: string }) {
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({ query, name, markAsRead: false }),
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`Briefing request failed (${res.status})`);
 
         const data: { briefing: string } = await res.json();
+        if (!isCurrent()) return;
         setBriefing(data.briefing);
         speak(data.briefing);
       } catch (err) {
+        if (!isCurrent()) return; // stopped or superseded — not an error
         console.error(err);
         setError("Couldn't fetch your briefing. Try again.");
         setState("idle");
@@ -102,36 +146,32 @@ export default function VoiceAssistant({ name }: { name?: string }) {
       runBriefing();
       return;
     }
-    let handled = false;
+    const turn = ++turnRef.current;
+    const isCurrent = () => turnRef.current === turn;
+    // No result (silence, error, abort): back to idle — unless something newer took over.
+    const end = () => {
+      if (!isCurrent()) return;
+      recognitionRef.current = null;
+      setState("idle");
+    };
+    recognitionRef.current = recognition;
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
-      handled = true;
+      if (!isCurrent()) return;
+      recognitionRef.current = null;
       const said = event.results[0][0].transcript;
       setTranscript(said);
-      runBriefing(said);
+      runBriefing(said); // takes a new turn, so the end event that follows is ignored
     };
-    recognition.onerror = () => {
-      if (!handled) {
-        handled = true;
-        setState("idle");
-      }
-    };
-    recognition.onend = () => {
-      if (!handled) {
-        handled = true;
-        setState("idle");
-      }
-    };
+    recognition.onerror = end;
+    recognition.onend = end;
     setState("listening");
     try {
       recognition.start();
     } catch {
-      if (!handled) {
-        handled = true;
-        setState("idle");
-      }
+      end();
     }
   }, [runBriefing]);
 
@@ -142,22 +182,20 @@ export default function VoiceAssistant({ name }: { name?: string }) {
   // Mic button: if busy, stop; otherwise start listening for a question.
   const handleMicClick = useCallback(() => {
     if (state !== "idle") {
-      window.speechSynthesis?.cancel();
-      setState("idle");
+      stopAll();
       return;
     }
     startListening();
-  }, [state, startListening]);
+  }, [state, startListening, stopAll]);
 
   // Briefing button: greet by name + summarize new pitches.
   const handleBriefingClick = useCallback(() => {
     if (state !== "idle") {
-      window.speechSynthesis?.cancel();
-      setState("idle");
+      stopAll();
       return;
     }
     runBriefing();
-  }, [state, runBriefing]);
+  }, [state, runBriefing, stopAll]);
 
   // -------- Double-clap detection (Web Audio) --------
   // A double-clap opens the mic to ask a question. Only holds the mic while
@@ -243,8 +281,7 @@ export default function VoiceAssistant({ name }: { name?: string }) {
   }, [clapEnabled, state]);
 
   const dismiss = () => {
-    window.speechSynthesis?.cancel();
-    setState("idle");
+    stopAll();
     setBriefing(null);
     setTranscript(null);
     setError(null);

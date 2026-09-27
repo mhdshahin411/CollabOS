@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useDeals } from "@/lib/dealsStore";
+import { dealCurrency, formatMoney, totalsByCurrency } from "@/lib/money";
 import { STAGES, CHANNEL_LABELS, type Channel } from "@/lib/types";
 
 const STAGE_COLORS: Record<string, string> = {
@@ -16,38 +17,53 @@ const CHANNEL_COLORS: Record<Channel, string> = {
   whatsapp: "#34d399",
 };
 
-function money(n: number): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      notation: n >= 100000 ? "compact" : "standard",
-      maximumFractionDigits: n >= 100000 ? 1 : 0,
-    }).format(n);
-  } catch {
-    return `$${n}`;
-  }
-}
-
 function ValueByStage() {
   const { deals } = useDeals();
   const [hover, setHover] = useState<number | null>(null);
-  const rows = STAGES.map((s) => ({
-    ...s,
-    value: deals.filter((d) => d.stage === s.id).reduce((sum, d) => sum + (d.budget ?? 0), 0),
-    count: deals.filter((d) => d.stage === s.id).length,
-  }));
+  const [picked, setPicked] = useState<string | null>(null);
+  // Amounts in different currencies can't share one scale, so the card shows
+  // one currency at a time (most-used first) with a switch when there are more.
+  const currencies = totalsByCurrency(deals).map((t) => t.currency);
+  const currency = picked && currencies.includes(picked) ? picked : (currencies[0] ?? "USD");
+  const rows = STAGES.map((s) => {
+    const stageDeals = deals.filter((d) => d.stage === s.id);
+    return {
+      ...s,
+      value: stageDeals
+        .filter((d) => d.budget != null && dealCurrency(d) === currency)
+        .reduce((sum, d) => sum + (d.budget ?? 0), 0),
+      count: stageDeals.length,
+    };
+  });
   const max = Math.max(1, ...rows.map((r) => r.value));
 
   return (
     <div className="glass-card rounded-3xl p-5">
-      <h3 className="mb-4 text-xs font-medium uppercase tracking-wider text-slate-400">Value by stage</h3>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-slate-400">Value by stage</h3>
+        {currencies.length > 1 && (
+          <div className="flex gap-1" role="group" aria-label="Currency">
+            {currencies.map((c) => (
+              <button
+                key={c}
+                onClick={() => setPicked(c)}
+                aria-pressed={c === currency}
+                className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                  c === currency ? "bg-white/15 text-white" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="space-y-3">
         {rows.map((r, i) => (
           <div key={r.id} className="relative" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
             <div className="mb-1 flex items-center justify-between text-xs">
               <span className="text-slate-300">{r.label}</span>
-              <span className="font-display text-sm text-slate-100">{money(r.value)}</span>
+              <span className="font-display text-sm text-slate-100">{formatMoney(r.value, currency, { compact: true })}</span>
             </div>
             <div className="h-2.5 overflow-hidden rounded-full bg-white/5">
               <div

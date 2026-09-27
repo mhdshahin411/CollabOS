@@ -22,6 +22,7 @@ interface DealsContextValue {
   loadError: string | null;
   retry: () => void;
   moveDeal: (dealId: string, stage: DealStage) => Promise<void>;
+  markRead: (dealId: string) => Promise<void>;
   selectedDealId: string | null;
   selectDeal: (id: string | null) => void;
   selectedDeal: Deal | null;
@@ -137,8 +138,7 @@ export function DealsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const moveDeal = useCallback(async (dealId: string, stage: DealStage) => {
-    const previous = dealsRef.current;
-    const deal = previous.find((d) => d.id === dealId);
+    const deal = dealsRef.current.find((d) => d.id === dealId);
     if (!deal || deal.stage === stage) return;
 
     setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, stage } : d)));
@@ -149,8 +149,24 @@ export function DealsProvider({ children }: { children: React.ReactNode }) {
       .eq("id", dealId);
     if (error) {
       console.error("Failed to move deal:", error);
-      setDeals(previous);
+      // Undo just this move — restoring the whole pre-move list would also
+      // drop any realtime changes that landed while the request was in flight.
+      setDeals((prev) =>
+        prev.map((d) => (d.id === dealId && d.stage === stage ? { ...d, stage: deal.stage } : d)),
+      );
     }
+  }, []);
+
+  // Opening a deal is what "reads" it. No rollback on failure: the next load
+  // or realtime event corrects it, and reverting would make the open panel
+  // retry in a loop.
+  const markRead = useCallback(async (dealId: string) => {
+    setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, is_read: true } : d)));
+    const { error } = await getSupabaseBrowser()
+      .from("deals")
+      .update({ is_read: true })
+      .eq("id", dealId);
+    if (error) console.error("Failed to mark deal read:", error);
   }, []);
 
   const selectDeal = useCallback((id: string | null) => setSelectedDealId(id), []);
@@ -179,6 +195,7 @@ export function DealsProvider({ children }: { children: React.ReactNode }) {
     loadError,
     retry,
     moveDeal,
+    markRead,
     selectedDealId,
     selectDeal,
     selectedDeal,
