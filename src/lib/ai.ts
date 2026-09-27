@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 import type { Deal, DealPriority } from "@/lib/types";
 
-// gpt-4o-mini: cheap + reliable structured-output extraction. Swap this one
-// constant for "gpt-5-mini" / "gpt-5-nano" (cheaper) if you want a newer model.
+// gpt-4o-mini: cheap + reliable structured-output extraction. To try a newer
+// model, swap this one constant — but GPT-5-family reasoning models reject a
+// custom `temperature`, so remove it from both calls below when you do.
 const MODEL = "gpt-4o-mini";
 
 let client: OpenAI | null = null;
@@ -42,6 +43,7 @@ Rules:
 - "deadline": content/delivery deadline as YYYY-MM-DD, resolving relative dates against today's date (provided). null if not stated.
 - "priority": "high" for large budgets, tight deadlines, or well-known brands; "medium" for typical pitches; "low" for vague or mass outreach.
 - "summary": 1-2 sentences a talent manager would write in a CRM.
+If an existing deal summary is provided, the message is a follow-up on that deal: take every other field from the new message only, and write "summary" as an updated 1-2 sentence summary of the whole deal so far.
 Extract only what is in the message. Never invent values.`;
 
 // strict:true guarantees the model returns JSON that validates this schema
@@ -78,12 +80,46 @@ const DEAL_SCHEMA = {
   },
 } as const;
 
+const PRIORITIES: DealPriority[] = ["low", "medium", "high"];
+
+// The extracted values land in typed columns. One Postgres rejects ("TBD" or
+// "2026-09" for a date, a budget that overflows numeric(12,2)) would fail the
+// insert, and the ingest route's 500 would make n8n retry — re-running this
+// call every time. So a malformed value becomes null rather than an error.
+function toIsoDate(v: unknown): string | null {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const [y, m, d] = v.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  // Only a real calendar day round-trips (2026-02-30 doesn't).
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? v : null;
+}
+
+function toBudget(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const amount = Math.round(v * 100) / 100;
+  return amount >= 0 && amount < 1e10 ? amount : null;
+}
+
+function toCurrency(v: unknown): string | null {
+  return typeof v === "string" && /^[a-z]{3}$/i.test(v.trim()) ? v.trim().toUpperCase() : null;
+}
+
+function toText(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/**
+ * `existingSummary` marks a follow-up on a known deal: the model then updates
+ * that summary instead of summarizing the new message on its own.
+ */
 export async function extractDealFromMessage(
   rawText: string,
   channel: string,
   sender?: string,
+  existingSummary?: string,
 ): Promise<ExtractedDeal> {
   const today = new Date().toISOString().slice(0, 10);
+  const context = existingSummary ? `Existing deal summary: ${existingSummary}\n` : "";
 
   const completion = await getOpenAI().chat.completions.create({
     model: MODEL,
@@ -94,7 +130,7 @@ export async function extractDealFromMessage(
       { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
       {
         role: "user",
-        content: `Channel: ${channel}\nSender: ${sender ?? "unknown"}\nToday's date: ${today}\n\nMessage:\n"""\n${rawText}\n"""`,
+        content: `Channel: ${channel}\nSender: ${sender ?? "unknown"}\nToday's date: ${today}\n${context}\nMessage:\n"""\n${rawText}\n"""`,
       },
     ],
   });
@@ -119,20 +155,21 @@ export async function extractDealFromMessage(
 
   // strict mode validates the schema, but the cast erases types — verify the
   // load-bearing fields before trusting them downstream.
-  const d = parsed as Partial<ExtractedDeal>;
-  if (typeof d.is_deal !== "boolean" || typeof d.summary !== "string" || !d.priority) {
+  const d = parsed as Record<string, unknown>;
+  if (typeof d.is_deal !== "boolean" || typeof d.summary !== "string" || !PRIORITIES.includes(d.priority as DealPriority)) {
     throw new Error(`OpenAI output missing required fields: ${text.slice(0, 200)}`);
   }
+  const deliverables = Array.isArray(d.deliverables) ? d.deliverables : [];
   return {
     is_deal: d.is_deal,
-    brand_name: d.brand_name ?? null,
-    contact_name: d.contact_name ?? null,
-    budget: d.budget ?? null,
-    currency: d.currency ?? null,
-    deliverables: d.deliverables ?? [],
-    deadline: d.deadline ?? null,
-    priority: d.priority,
-    summary: d.summary,
+    brand_name: toText(d.brand_name),
+    contact_name: toText(d.contact_name),
+    budget: toBudget(d.budget),
+    currency: toCurrency(d.currency),
+    deliverables: deliverables.map(toText).filter((s): s is string => s !== null),
+    deadline: toIsoDate(d.deadline),
+    priority: d.priority as DealPriority,
+    summary: d.summary.trim(),
   };
 }
 
